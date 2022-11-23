@@ -21,7 +21,8 @@ class Patient:
         self.is_assigned=False
         self.temp_lostcost=0
         self.temp_lostPoint=0
-        self.temp_distancePoint=0;
+        self.temp_distancePoint=0
+        self.temp_center=0
 
     def calculate_np(self,planing_horizon = 14):
         long_alpha = 3
@@ -38,6 +39,8 @@ class Patient:
         #return network.distancePointCalculator(self, center)
     def getTempDist(self):
         return self.temp_distancePoint
+
+
 
 
 class Center:
@@ -63,7 +66,7 @@ class Center:
         self.patients.append(patient)
         self.remaining_capacity-=1
         self.patient_In_Center+=1
-        if(self.remaining_capacity==0):
+        if(self.remaining_capacity<1):
             self.is_Full=True
 
     def distance_to_Patient(self,patient):
@@ -191,6 +194,19 @@ class Network:
         else:
             patient.temp_distancePoint =0
 
+    def distancePointCalculatorPatient(self,patient):
+           min_distance,min_center=self.nearest_center(patient)
+           print(patient.np)
+           #patient.temp_distancePoint=patient.np / min_distance
+           patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
+           patient.temp_center=min_center
+
+    def patientListSorted(self):
+        for patient in self.patients:
+            self.distancePointCalculatorPatient(patient)
+        return sorted(self.patients, key=lambda x: x.temp_distancePoint, reverse=True)
+
+
     def lostPointList(self, center, coverage):
         patient_list = self.candidate_patients(center,coverage)
         for patient in patient_list:
@@ -206,7 +222,17 @@ class Network:
         return  sorted(patient_list, key=lambda x: x.temp_distancePoint, reverse=True)
 
 
+    def assignPatientsByDistPoint(self):
+        patient_list = self.patientListSorted()
+        print('----------------')
+        print(len(patient_list))
+        print('----------------')
 
+        for patient in patient_list:
+            min_center=patient.temp_center
+            if(patient.distance_to_Center(min_center)<6 and min_center.is_Full==False):
+                min_center.addPatient(patient)
+                self.assigned_patients += 1
 
     def assignbyLostPoint(self):
         for center in self.centers:
@@ -219,8 +245,10 @@ class Network:
 
     def assignbyDistPoint(self):
         for center in self.centers:
+
             patient_list = self.distPointList(center, 6)
             range_s = min(int(center.capacity), len(patient_list))
+
             for i in range(0, range_s):
                 center.addPatient(patient_list[i])
                 self.assigned_patients+=1
@@ -255,7 +283,8 @@ if __name__ == '__main__':
         center_instance_no+=1
         network.add_center(current_center)
 
-    network.assignbyLostPoint()
+    network.assignPatientsByDistPoint()
+    #network.assignbyLostPoint()
     #network.assignbyDistPoint()
 
     network.Print()
