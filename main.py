@@ -137,7 +137,7 @@ class Network:
                 if(patient.sp==3):
                     sp3Patient+=1
 
-                current_distance+=patient.distance_to_Center(center)
+                current_distance+=patient.distance_to_Center(center) * patient.np
             print("Number of sp1: ",sp1Patient," Number of sp2 ",sp2Patient, "Number of sp3 ",sp3Patient)
             print("Total Distance at center ",current_distance)
             print("------------")
@@ -152,8 +152,9 @@ class Network:
         total_distance = 0
         for center in self.centers:
             for patient in center.patients:
-                total_distance+=patient.distance_to_Center(center)
+                total_distance+=patient.distance_to_Center(center)*patient.np
         return total_distance
+
     def add_patient(self,patient):
         self.patients.append(patient)
         self.patient_count+=1
@@ -198,16 +199,18 @@ class Network:
 
     def distancePointCalculator(self, patient,center):
         if(patient.distance_to_Center(center)!=0):
-         patient.temp_distancePoint = patient.np / patient.distance_to_Center(center)
+            #patient.temp_distancePoint = 1 / patient.distance_to_Center(center)
+            patient.temp_distancePoint = patient.np / patient.distance_to_Center(center)
         else:
             patient.temp_distancePoint =0
 
     def distancePointCalculatorPatient(self,patient):
-           min_distance,min_center=self.nearest_center(patient)
-           #print(patient.np)
-           #patient.temp_distancePoint=patient.np / min_distance
-           patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
-           patient.temp_center=min_center
+        min_distance,min_center=self.nearest_center(patient)
+        #print(patient.np)
+        #patient.temp_distancePoint=patient.np / min_distance
+        patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
+
+        patient.temp_center=min_center
 
     def patientListSorted(self):
         for patient in self.patients:
@@ -227,6 +230,26 @@ class Network:
         #return sorted(patient_list, key=patient.temp_distancePoint,reverse=True)
         #return sorted(patient_list, key=Patient.getTempDist(Patient), reverse=True)
         return sorted(patient_list, key=lambda x: x.temp_distancePoint, reverse=True)
+
+    def assign_patients_balanced_sp(self):
+        for center in self.centers:
+
+            patient_list = self.distPointList(center, 6) #sorted by: patient.np / patient.distance_to_Center(center)
+            remaining_sorted_patients = patient_list.copy()
+            for i in range(round(center.capacity)//1):
+                if center.is_Full:
+                    break
+                for sp in range(1,4):
+                    if center.is_Full:
+                        break
+                    for patient in remaining_sorted_patients:
+                        if center.is_Full:
+                            break
+                        if patient.sp == sp :
+                            remaining_sorted_patients.remove(patient)
+                            center.addPatient(patient)
+                            self.assigned_patients += 1
+                            break
 
     def assignPatientsByDistPoint(self):
         patient_list = self.patientListSorted()
@@ -341,13 +364,31 @@ if __name__ == '__main__':
         center_instance_no += 1
         network.add_center(current_center)
 
-    #network.assignPatientsByDistPoint()
-    #network.assignbyLostPoint()
-    network.assignbyDistPoint()
+    network2 = copy.deepcopy(network)
+    network3 = copy.deepcopy(network)
+    network4 = copy.deepcopy(network)
 
+    print('Patient Assignment')
+    network.assignPatientsByDistPoint()
     network.Print()
+    print(20 * "-")
+
+    print('Lost Point Assignment')
+    network2.assignbyLostPoint()
+    network2.Print()
+    print(20 * "-")
+
+    print('Dist Point Assignment')
+    network3.assignbyDistPoint()
+    network3.Print()
+    print(20 * "-")
+
+    print("Balanced sp")
+    network4.assign_patients_balanced_sp()
+    network4.Print()
+
     print(20*"-")
     print('Simulated Annealing Approach')
 
-    best_solution = network.simulated_annealing(initial_temperature=10000,cooling_rate=0.8,epoch_length=10)
-    best_solution.Print()
+    #best_solution = network.simulated_annealing(initial_temperature=10000,cooling_rate=0.8,epoch_length=10)
+    #best_solution.Print()
