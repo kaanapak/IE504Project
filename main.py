@@ -6,6 +6,8 @@ import random
 
 import pandas as pd
 import math
+from random import randrange
+import copy
 
 class Patient:
 
@@ -40,9 +42,6 @@ class Patient:
     def getTempDist(self):
         return self.temp_distancePoint
 
-
-
-
 class Center:
     def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count):
             self.name=name
@@ -60,7 +59,6 @@ class Center:
             self.remaining_capacity=self.capacity
             self.patients=[]
 
-
     def addPatient(self,patient):
         patient.is_assigned=True
         self.patients.append(patient)
@@ -68,6 +66,13 @@ class Center:
         self.patient_In_Center+=1
         if(self.remaining_capacity<1):
             self.is_Full=True
+
+    def remove_patient(self,patient):
+        patient.is_assigned =False
+        self.patients.remove(patient)
+        self.remaining_capacity += 1
+        self.patient_In_Center -=1
+        self.is_Full = False
 
     def distance_to_Patient(self,patient):
         return self.distances.iloc[int(patient.no)]
@@ -92,13 +97,13 @@ class Center:
             inequality_rhs_bottom = ((planing_horizon - (long_alpha - 1) - L * short_alpha) / long_alpha) + (L * 0.5)
             inequality_rhs = inequality_rhs_top / inequality_rhs_bottom
 
-        capacity_at_day_0 = self.number_of_machines * (8 / 4)  #8 hours on a day assumed
+        capacity_at_day_0 = self.number_of_machines*0.2 * (8 / 4)  #8 hours on a day assumed
         #capacity_at_day_* (Ch0) = num_of_machines * hours_in_a_day / length of a long session (4-hours)
 
-        #capacity = (long_alpha * self.number_of_machines + 1) * math.floor(capacity_at_day_0 / c) + long_alpha * (capacity_at_day_0 % c)
-        #print(capacity)
+        capacity = (long_alpha * self.number_of_machines*0.2 + 1) * math.floor(capacity_at_day_0 / c) + long_alpha * (capacity_at_day_0 % c)
+        print(capacity)
 
-        capacity = self.number_of_machines * 3.5
+        #capacity = self.number_of_machines * 3.5
         return capacity
 
 
@@ -143,9 +148,12 @@ class Network:
         print('Number of transferred out ',(self.patient_count-total_patient))
         print('Total distance ',total_distance)
 
-
-
-
+    def objective_function(self):  # SEFA: UPDATE WITH VALUES OF BETA and SENDING A PATIENT OUTSIDE
+        total_distance = 0
+        for center in self.centers:
+            for patient in center.patients:
+                total_distance+=patient.distance_to_Center(center)
+        return total_distance
     def add_patient(self,patient):
         self.patients.append(patient)
         self.patient_count+=1
@@ -196,7 +204,7 @@ class Network:
 
     def distancePointCalculatorPatient(self,patient):
            min_distance,min_center=self.nearest_center(patient)
-           print(patient.np)
+           #print(patient.np)
            #patient.temp_distancePoint=patient.np / min_distance
            patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
            patient.temp_center=min_center
@@ -205,7 +213,6 @@ class Network:
         for patient in self.patients:
             self.distancePointCalculatorPatient(patient)
         return sorted(self.patients, key=lambda x: x.temp_distancePoint, reverse=True)
-
 
     def lostPointList(self, center, coverage):
         patient_list = self.candidate_patients(center,coverage)
@@ -219,8 +226,7 @@ class Network:
             self.distancePointCalculator(patient,center)
         #return sorted(patient_list, key=patient.temp_distancePoint,reverse=True)
         #return sorted(patient_list, key=Patient.getTempDist(Patient), reverse=True)
-        return  sorted(patient_list, key=lambda x: x.temp_distancePoint, reverse=True)
-
+        return sorted(patient_list, key=lambda x: x.temp_distancePoint, reverse=True)
 
     def assignPatientsByDistPoint(self):
         patient_list = self.patientListSorted()
@@ -242,7 +248,6 @@ class Network:
                 center.addPatient(patient_list[i])
                 self.assigned_patients += 1
 
-
     def assignbyDistPoint(self):
         for center in self.centers:
 
@@ -253,7 +258,60 @@ class Network:
                 center.addPatient(patient_list[i])
                 self.assigned_patients+=1
 
+    def simulated_annealing(self,initial_temperature,cooling_rate,epoch_length):
+        T = initial_temperature
+        iteration = 1
+        incumbent_solution = copy.deepcopy(network)
+        while T > 0.01:
+            min_delta = 1000
 
+            for epoch in range(1,epoch_length+1):
+
+                # Pick 2 random centers
+                center_1 = random.choice(self.centers)
+                center_2 = random.choice(self.centers)
+                while center_1 == center_2:
+                    center_2 = random.choice(self.centers)
+
+                # Pick 2 random patients from these centers
+                first_patient = random.choice(center_1.patients)
+                second_patient = random.choice(center_2.patients)
+
+                old_cost = center_1.distance_to_Patient(first_patient)*first_patient.np + center_2.distance_to_Patient(second_patient)*second_patient.np
+                new_cost = center_1.distance_to_Patient(second_patient)*second_patient.np  + center_2.distance_to_Patient(first_patient)*first_patient.np
+                delta = new_cost - old_cost
+
+                if delta < min_delta:
+                    min_delta = delta
+                    min_center_1 = center_1
+                    min_center_2 = center_2
+                    min_patient_1 = first_patient
+                    min_patient_2 = second_patient
+
+            # If total distance reduces with this swap, Swap patients or accept according to metropolis criterion
+            if min_delta < 0 or self.metropolis_criterion(min_delta,T):
+                min_center_1.remove_patient(min_patient_1)
+                min_center_2.remove_patient(min_patient_2)
+                min_center_2.addPatient(min_patient_1)
+                min_center_1.addPatient(min_patient_2)
+
+                print(f"Temperature = {T:.3f}: Solution accepted with {min_delta}")
+                #break  # Should we stop epochs when we found an improving solution?
+
+            else:
+                print(f"Temperature = {T:.3f} :Solution rejected with {min_delta}")
+
+            if network.objective_function() < incumbent_solution.objective_function():
+                incumbent_solution = copy.deepcopy(network)
+
+            T *= cooling_rate
+
+        return incumbent_solution
+
+    def metropolis_criterion(self,delta,T):
+        random_number = random.random()
+        criteria = math.exp(-delta/T)
+        return random_number < criteria
 
 
 if __name__ == '__main__':
@@ -280,11 +338,16 @@ if __name__ == '__main__':
     for index, row in dialysis_centers.iterrows():
 
         current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count)
-        center_instance_no+=1
+        center_instance_no += 1
         network.add_center(current_center)
 
-    network.assignPatientsByDistPoint()
+    #network.assignPatientsByDistPoint()
     #network.assignbyLostPoint()
-    #network.assignbyDistPoint()
+    network.assignbyDistPoint()
 
     network.Print()
+    print(20*"-")
+    print('Simulated Annealing Approach')
+
+    best_solution = network.simulated_annealing(initial_temperature=10000,cooling_rate=0.8,epoch_length=10)
+    best_solution.Print()
