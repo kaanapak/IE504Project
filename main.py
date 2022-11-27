@@ -3,6 +3,8 @@
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import random
+import time
+from collections import defaultdict
 
 import pandas as pd
 import math
@@ -43,7 +45,7 @@ class Patient:
         return self.temp_distancePoint
 
 class Center:
-    def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count):
+    def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count,ch0):
             self.name=name
             self.no=no
             self.Instance_no=Instance_no
@@ -51,6 +53,7 @@ class Center:
             self.x = x
             self.y = y
             self.number_of_machines = number_of_machines
+            self.ch0 = ch0
             self.capacity = self.calculate_capacity()
             self.distances = distances
             self.patient_count = patient_count
@@ -97,10 +100,11 @@ class Center:
             inequality_rhs_bottom = ((planing_horizon - (long_alpha - 1) - L * short_alpha) / long_alpha) + (L * 0.5)
             inequality_rhs = inequality_rhs_top / inequality_rhs_bottom
 
-        capacity_at_day_0 = self.number_of_machines*0.2 * (8 / 4)  #8 hours on a day assumed
+        #capacity_at_day_0 = self.number_of_machines * 0.2 * (8 / 4)  #8 hours on a day assumed
         #capacity_at_day_* (Ch0) = num_of_machines * hours_in_a_day / length of a long session (4-hours)
+        ch0 = self.ch0
 
-        capacity = (long_alpha * self.number_of_machines*0.2 + 1) * math.floor(capacity_at_day_0 / c) + long_alpha * (capacity_at_day_0 % c)
+        capacity = (long_alpha * c + 1) * math.floor(ch0 / c) + long_alpha * (ch0 % c)
         print(capacity)
 
         #capacity = self.number_of_machines * 3.5
@@ -137,7 +141,7 @@ class Network:
                 if(patient.sp==3):
                     sp3Patient+=1
 
-                current_distance+=patient.distance_to_Center(center) * patient.np
+                current_distance += patient.distance_to_Center(center) * patient.np
             print("Number of sp1: ",sp1Patient," Number of sp2 ",sp2Patient, "Number of sp3 ",sp3Patient)
             print("Total Distance at center ",current_distance)
             print("------------")
@@ -204,11 +208,21 @@ class Network:
         else:
             patient.temp_distancePoint =0
 
+    def distance_calculator(self, patient,center): #Distance calculation (C1 and P1 Algorithms)
+        if patient.distance_to_Center(center)!=0:
+            patient.temp_distancePoint = 1 / patient.distance_to_Center(center)
+            # patient.temp_distancePoint = patient.np / patient.distance_to_Center(center)
+        else:
+            patient.temp_distancePoint =0
+
+    def c1_constructive_heuristics(self):
+        pass
+
     def distancePointCalculatorPatient(self,patient):
-        min_distance,min_center=self.nearest_center(patient)
+        min_distance,min_center = self.nearest_center(patient)
         #print(patient.np)
-        #patient.temp_distancePoint=patient.np / min_distance
-        patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
+        patient.temp_distancePoint = 1 / (min_distance * patient.np)
+        #patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
 
         patient.temp_center=min_center
 
@@ -318,11 +332,12 @@ class Network:
                 min_center_2.addPatient(min_patient_1)
                 min_center_1.addPatient(min_patient_2)
 
-                print(f"Temperature = {T:.3f}: Solution accepted with {min_delta}")
+                #print(f"Temperature = {T:.3f}: Solution accepted with {min_delta}")
                 #break  # Should we stop epochs when we found an improving solution?
 
             else:
-                print(f"Temperature = {T:.3f} :Solution rejected with {min_delta}")
+                pass
+                #print(f"Temperature = {T:.3f} :Solution rejected with {min_delta}")
 
             if network.objective_function() < incumbent_solution.objective_function():
                 incumbent_solution = copy.deepcopy(network)
@@ -357,30 +372,32 @@ if __name__ == '__main__':
 
     center_instance_no=0
     distance_centers=distanceMatrix.tail(distanceMatrix.shape[0] -patient_count)
-
+    ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B1')
+    center_index = 0
     for index, row in dialysis_centers.iterrows():
-
-        current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count)
+        ch0 = ch0_data['İyi'].iloc[center_index]
+        current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0)
         center_instance_no += 1
         network.add_center(current_center)
+        center_index += 1
 
     network2 = copy.deepcopy(network)
     network3 = copy.deepcopy(network)
     network4 = copy.deepcopy(network)
 
     print('Patient Assignment')
-    network.assignPatientsByDistPoint()
-    network.Print()
+    #network.assignPatientsByDistPoint()
+    #network.Print()
     print(20 * "-")
 
-    print('Lost Point Assignment')
-    network2.assignbyLostPoint()
-    network2.Print()
+    #print('Lost Point Assignment')
+    #network2.assignbyLostPoint()
+    #network2.Print()
     print(20 * "-")
 
     print('Dist Point Assignment')
-    network3.assignbyDistPoint()
-    network3.Print()
+    #network3.assignbyDistPoint()
+    #network3.Print()
     print(20 * "-")
 
     print("Balanced sp")
@@ -390,5 +407,15 @@ if __name__ == '__main__':
     print(20*"-")
     print('Simulated Annealing Approach')
 
-    #best_solution = network.simulated_annealing(initial_temperature=10000,cooling_rate=0.8,epoch_length=10)
-    #best_solution.Print()
+    simulated_annealing_results = []
+
+    for iteration in range(0,10):
+        start = time.time()
+        improved_network = copy.deepcopy(network4)
+        best_solution = improved_network.simulated_annealing(initial_temperature=100000,cooling_rate=0.8,epoch_length=10)
+        end = time.time()
+        simulated_annealing_results.append([iteration, best_solution.objective_function(), end - start])
+
+    simulated_annealing_result_df = pd.DataFrame(simulated_annealing_results,columns=['Run','Objective Value','Runtime'])
+    print(simulated_annealing_result_df)
+    y = 5
