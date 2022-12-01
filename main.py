@@ -58,7 +58,11 @@ class Center:
             self.distances = distances
             self.patient_count = patient_count
             self.patient_In_Center=0
-            self.is_Full=False
+
+            if self.capacity > 0:
+                self.is_Full = False
+            else:
+                self.is_Full = True
             self.remaining_capacity=self.capacity
             self.patients=[]
 
@@ -121,6 +125,9 @@ class Network:
         self.total_patients=total_patients
         self.patient_count=0
         self.assigned_patients=0
+        self.total_capacity = 0
+
+
 
     def Print(self):
         total_patient=0;
@@ -154,9 +161,13 @@ class Network:
 
     def objective_function(self):  # SEFA: UPDATE WITH VALUES OF BETA and SENDING A PATIENT OUTSIDE
         total_distance = 0
+        #beta = 10
+        epsilon = 0.001
+        cost_of_sending_out = 200
         for center in self.centers:
             for patient in center.patients:
-                total_distance+=patient.distance_to_Center(center)*patient.np
+                total_distance += patient.distance_to_Center(center)*patient.np
+
         return total_distance
 
     def add_patient(self,patient):
@@ -202,29 +213,22 @@ class Network:
         patient.temp_lostPoint = patient.temp_lostcost * patient.np
 
     def distancePointCalculator(self, patient,center):
+
         if(patient.distance_to_Center(center)!=0):
-            #patient.temp_distancePoint = 1 / patient.distance_to_Center(center)
-            patient.temp_distancePoint = patient.np / patient.distance_to_Center(center)
-        else:
-            patient.temp_distancePoint =0
+            patient.temp_distancePoint = 1 / (patient.distance_to_Center(center))
+            #patient.temp_distancePoint = 1 / (patient.distance_to_Center(center) * patient.np)
 
-    def distance_calculator(self, patient,center): #Distance calculation (C1 and P1 Algorithms)
-        if patient.distance_to_Center(center)!=0:
-            patient.temp_distancePoint = 1 / patient.distance_to_Center(center)
-            # patient.temp_distancePoint = patient.np / patient.distance_to_Center(center)
         else:
-            patient.temp_distancePoint =0
-
-    def c1_constructive_heuristics(self):
-        pass
+            patient.temp_distancePoint = 0
 
     def distancePointCalculatorPatient(self,patient):
-        min_distance,min_center = self.nearest_center(patient)
-        #print(patient.np)
-        patient.temp_distancePoint = 1 / (min_distance * patient.np)
-        #patient.temp_distancePoint = (100*(patient.np-5))/ min_distance
 
-        patient.temp_center=min_center
+        min_distance, min_center = self.nearest_center(patient)
+        #patient.temp_distancePoint = 1 / min_distance
+
+        patient.temp_distancePoint = 1 / (min_distance * patient.np)
+
+        patient.temp_center = min_center
 
     def patientListSorted(self):
         for patient in self.patients:
@@ -245,10 +249,10 @@ class Network:
         #return sorted(patient_list, key=Patient.getTempDist(Patient), reverse=True)
         return sorted(patient_list, key=lambda x: x.temp_distancePoint, reverse=True)
 
-    def assign_patients_balanced_sp(self):
+    def assign_patients_balanced_sp(self): #C2
         for center in self.centers:
 
-            patient_list = self.distPointList(center, 6) #sorted by: patient.np / patient.distance_to_Center(center)
+            patient_list = self.distPointList(center, 25) #sorted by: patient.np / patient.distance_to_Center(center)
             remaining_sorted_patients = patient_list.copy()
             for i in range(round(center.capacity)//1):
                 if center.is_Full:
@@ -270,16 +274,21 @@ class Network:
         print('----------------')
         print(len(patient_list))
         print('----------------')
+        self.total_capacity = 0
 
         for patient in patient_list:
-            min_center=patient.temp_center
-            if(patient.distance_to_Center(min_center)<6 and min_center.is_Full==False):
+            min_center = patient.temp_center
+            if(patient.distance_to_Center(min_center)<25 and min_center.is_Full==False):
                 min_center.addPatient(patient)
                 self.assigned_patients += 1
+        for center in self.centers:
+            self.total_capacity += center.capacity
+        if self.assigned_patients < self.total_capacity:
+            self.assignbyDistPoint()
 
     def assignbyLostPoint(self):
         for center in self.centers:
-            patient_list=self.lostPointList(center,6)
+            patient_list=self.lostPointList(center,25)
             range_s=min(int(center.capacity),len(patient_list)-1)
             for i in range(0,range_s):
                 center.addPatient(patient_list[i])
@@ -288,68 +297,60 @@ class Network:
     def assignbyDistPoint(self):
         for center in self.centers:
 
-            patient_list = self.distPointList(center, 6)
-            range_s = min(int(center.capacity), len(patient_list))
+            patient_list = self.distPointList(center, 25)
+
+            range_s = min(int(center.capacity - len(center.patients)), len(patient_list))
 
             for i in range(0, range_s):
-                center.addPatient(patient_list[i])
-                self.assigned_patients+=1
+                if not patient_list[i].is_assigned :
+                    center.addPatient(patient_list[i])
+                    self.assigned_patients+=1
 
-    def simulated_annealing(self,initial_temperature,cooling_rate,epoch_length):
-        T = initial_temperature
-        iteration = 1
-        incumbent_solution = copy.deepcopy(network)
-        while T > 0.01:
-            min_delta = 1000
+def simulated_annealing(network,initial_temperature,cooling_rate,epoch_length):
+    T = initial_temperature
+    incumbent_solution = copy.deepcopy(network)
+    while T > 0.001:
 
-            for epoch in range(1,epoch_length+1):
+        for epoch in range(1,epoch_length+1):
 
-                # Pick 2 random centers
-                center_1 = random.choice(self.centers)
-                center_2 = random.choice(self.centers)
-                while center_1 == center_2:
-                    center_2 = random.choice(self.centers)
+            # Pick 2 random centers
+            center_1 = random.choice(network.centers)
+            center_2 = random.choice(network.centers)
+            while center_1 == center_2:
+                center_2 = random.choice(network.centers)
 
-                # Pick 2 random patients from these centers
-                first_patient = random.choice(center_1.patients)
-                second_patient = random.choice(center_2.patients)
+            # Pick 2 random patients from these centers
+            first_patient = random.choice(center_1.patients)
+            second_patient = random.choice(center_2.patients)
 
-                old_cost = center_1.distance_to_Patient(first_patient)*first_patient.np + center_2.distance_to_Patient(second_patient)*second_patient.np
-                new_cost = center_1.distance_to_Patient(second_patient)*second_patient.np  + center_2.distance_to_Patient(first_patient)*first_patient.np
-                delta = new_cost - old_cost
-
-                if delta < min_delta:
-                    min_delta = delta
-                    min_center_1 = center_1
-                    min_center_2 = center_2
-                    min_patient_1 = first_patient
-                    min_patient_2 = second_patient
+            old_cost = center_1.distance_to_Patient(first_patient)*first_patient.np + center_2.distance_to_Patient(second_patient)*second_patient.np
+            new_cost = center_1.distance_to_Patient(second_patient)*second_patient.np + center_2.distance_to_Patient(first_patient)*first_patient.np
+            delta = new_cost - old_cost
 
             # If total distance reduces with this swap, Swap patients or accept according to metropolis criterion
-            if min_delta < 0 or self.metropolis_criterion(min_delta,T):
-                min_center_1.remove_patient(min_patient_1)
-                min_center_2.remove_patient(min_patient_2)
-                min_center_2.addPatient(min_patient_1)
-                min_center_1.addPatient(min_patient_2)
+            if delta < 0 or metropolis_criterion(delta,T): #
+                center_1.remove_patient(first_patient)
+                center_2.remove_patient(second_patient)
+                center_2.addPatient(first_patient)
+                center_1.addPatient(second_patient)
 
-                #print(f"Temperature = {T:.3f}: Solution accepted with {min_delta}")
-                #break  # Should we stop epochs when we found an improving solution?
+                #print(f"Temperature = {T:.3f}: Solution accepted with {delta}")
 
             else:
                 pass
-                #print(f"Temperature = {T:.3f} :Solution rejected with {min_delta}")
+                #print(f"Temperature = {T:.3f} :Solution rejected with {delta}")
 
             if network.objective_function() < incumbent_solution.objective_function():
                 incumbent_solution = copy.deepcopy(network)
 
-            T *= cooling_rate
+        T *= cooling_rate
 
-        return incumbent_solution
+    return incumbent_solution
 
-    def metropolis_criterion(self,delta,T):
-        random_number = random.random()
-        criteria = math.exp(-delta/T)
-        return random_number < criteria
+def metropolis_criterion(delta,T):
+    random_number = random.random()
+    criteria = math.exp(-delta/T)
+    return random_number < criteria
 
 
 if __name__ == '__main__':
@@ -369,53 +370,60 @@ if __name__ == '__main__':
     dialysis_centers = dialysis_centers.merge(facility_instance, how="left",on=['Merkez/Hastane No'])
     dialysis_centers=dialysis_centers[dialysis_centers['Is_Instance']=='Yes']
 
-
     center_instance_no=0
-    distance_centers=distanceMatrix.tail(distanceMatrix.shape[0] -patient_count)
-    ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B1')
+    distance_centers=distanceMatrix.tail(distanceMatrix.shape[0] - patient_count)
+    ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B3')
     center_index = 0
+
     for index, row in dialysis_centers.iterrows():
-        ch0 = ch0_data['İyi'].iloc[center_index]
+        ch0 = ch0_data['Orta'].iloc[center_index]
         current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0)
         center_instance_no += 1
         network.add_center(current_center)
         center_index += 1
 
     network2 = copy.deepcopy(network)
-    network3 = copy.deepcopy(network)
-    network4 = copy.deepcopy(network)
 
-    print('Patient Assignment')
-    #network.assignPatientsByDistPoint()
-    #network.Print()
-    print(20 * "-")
+    start = time.time()
 
-    #print('Lost Point Assignment')
-    #network2.assignbyLostPoint()
-    #network2.Print()
-    print(20 * "-")
+    print('P2')
+    network.assign_patients_balanced_sp()
+    network.Print()
 
-    print('Dist Point Assignment')
-    #network3.assignbyDistPoint()
-    #network3.Print()
-    print(20 * "-")
-
-    print("Balanced sp")
-    network4.assign_patients_balanced_sp()
-    network4.Print()
+    end = time.time()
+    print(f'P2 took {end-start}')
 
     print(20*"-")
     print('Simulated Annealing Approach')
 
     simulated_annealing_results = []
 
-    for iteration in range(0,10):
+    for iteration in range(0,1):
         start = time.time()
-        improved_network = copy.deepcopy(network4)
-        best_solution = improved_network.simulated_annealing(initial_temperature=100000,cooling_rate=0.8,epoch_length=10)
+        improved_network = copy.deepcopy(network)
+        best_solution = simulated_annealing(network = improved_network,initial_temperature=1000,cooling_rate=0.99,epoch_length=3)
+        improved_network.Print()
         end = time.time()
-        simulated_annealing_results.append([iteration, best_solution.objective_function(), end - start])
+        simulated_annealing_results.append([iteration, best_solution.objective_function(),improved_network.objective_function(),end - start])
 
-    simulated_annealing_result_df = pd.DataFrame(simulated_annealing_results,columns=['Run','Objective Value','Runtime'])
+    simulated_annealing_result_df = pd.DataFrame(simulated_annealing_results,columns=['Run','Incumbent Objective Value','Final Objective Value','Runtime'])
+    simulated_annealing_result_df.to_excel('Result.xlsx')
     print(simulated_annealing_result_df)
+
+
+    l = list()
+    network = Network(14,patient_count)
+    center_instance_no = 0
+    distance_centers = distanceMatrix.tail(distanceMatrix.shape[0] - patient_count)
+    ch0_data = pd.read_excel('Capacity.xlsx', sheet_name='B3')
+    center_index = 0
+    for index, row in dialysis_centers.iterrows():
+        for severity in ['İyimser', 'Orta', 'Karamsar']:
+            ch0 = ch0_data[severity].iloc[center_index]
+            current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0)
+            l.append([current_center.name, current_center.no, current_center.capacity, "B3",severity])
+        center_index += 1
+
+    df = pd.DataFrame(l, columns=["center name", "no", "capacity", "instance", 'Severity'])
+    df.to_excel('kapasitelerB3.xlsx')
     y = 5
