@@ -27,6 +27,18 @@ class Patient:
         self.temp_lostPoint=0
         self.temp_distancePoint=0
         self.temp_center=0
+        self.left_time=(3-self.sp)
+        self.left_short=3
+        self.num_short=0
+        self.received_service=False
+        self.transferred_out=False
+        self.is_candidate=False
+        self.treatments=[]
+
+
+    def PrintTreatments(self):
+        for treatment in self.treatments:
+            treatment.Print()
 
     def calculate_np(self,planing_horizon = 14):
         long_alpha = 3
@@ -44,7 +56,66 @@ class Patient:
     def getTempDist(self):
         return self.temp_distancePoint
 
+class Treatment:
+
+    def __init__(self,patient,type,day):
+        self.day=day
+        self.patient=patient
+        self.type=type
+        self.duration=self.initialize_duration()
+    def Print(self):
+        print("Day ",self.day," Type ",self.type)
+
+    def PrintWP(self):
+        print(" Type ", self.type," Patient ",self.patient.no)
+
+
+    def initialize_duration(self):
+        if(self.type=="Short"):
+            return 2
+        elif(self.type=="Normal"):
+            return 4
+
+class Machine:
+
+    def __init__(self,no):
+        self.no=no
+        self.schedule=self.initialize_schedule()
+        self.short_duration=2
+        self.normal_duration =4
+        self.day_duration=8
+
+    def Print(self):
+        for d_index in range(0,14):
+            print(" Day",d_index+1)
+            for treatment in self.schedule[d_index]:
+                treatment.PrintWP()
+
+
+
+    def initialize_schedule(self):
+        schedule=[]
+        for i in range(0,14):
+            schedule.append(list())
+        return schedule
+
+    def calculate_total_duration(self,day):
+        total_duration=0
+        for treatment in self.schedule[day-1]:
+            total_duration+=treatment.duration
+        return total_duration
+
+    def add_Patient(self,patient,type,day):
+        treatment=Treatment(patient,type,day)
+        if(self.calculate_total_duration(day)+treatment.duration<=self.day_duration):
+            self.schedule[day-1].append(treatment)
+            patient.treatments.append(treatment)
+            return True
+        else:
+            return False
+
 class Center:
+
     def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count,ch0):
             self.name=name
             self.no=no
@@ -61,7 +132,245 @@ class Center:
             self.is_Full=False
             self.remaining_capacity=self.capacity
             self.patients=[]
+            self.machines=self.initialize_machines()
+            self.count_received=0
+            self.ratios=14*[None]
 
+    def totalService(self):
+        for day in range(1,15):
+            total_short = 0
+            total_normal = 0
+            for machine in self.machines:
+                for treatment in machine.schedule[day-1]:
+                    if(treatment.type=="Short"):
+                        total_short+=1
+                    else:
+                        total_normal+=1
+            print(" Day ",day," Short ",total_short," Normal ",total_normal," Ratio short ",total_short/(total_short+total_normal))
+
+    def PrintPatientTreatments(self):
+        print("---- Printing Patients")
+        for patient in self.patients:
+
+
+            if(patient.transferred_out==False):
+                print("Patient ", patient.no)
+                patient.PrintTreatments()
+                print("   ")
+
+    def PrintMachineTreatments(self):
+        print("---- Printing Machines")
+        for machine in self.machines:
+            print("Machine ", machine.no)
+            machine.Print()
+            print("   ")
+
+    def Paste(self,Center):
+        self.name = copy.deepcopy(Center.name)
+        self.no = copy.deepcopy(Center.no)
+        self.Instance_no = copy.deepcopy(Center.Instance_no)
+        self.district = copy.deepcopy(Center.district)
+        self.x = copy.deepcopy(Center.x)
+        self.y = copy.deepcopy(Center.y)
+        self.number_of_machines = copy.deepcopy(Center.number_of_machines)
+        self.ch0 = copy.deepcopy(Center.ch0)
+        self.capacity = copy.deepcopy(Center.capacity)
+        self.distances = copy.deepcopy(Center.distances)
+        self.patient_count = copy.deepcopy(Center.patient_count)
+        self.patient_In_Center = copy.deepcopy(Center.patient_In_Center)
+        self.is_Full = copy.deepcopy(Center.is_Full)
+        self.remaining_capacity = copy.deepcopy(Center.capacity)
+        self.patients = copy.deepcopy(Center.patients)
+        self.machines = copy.deepcopy(Center.machines)
+        self.count_received = copy.deepcopy(Center.count_received)
+        self.ratios=copy.deepcopy(Center.ratios)
+
+    def initialize_machines(self):
+        list_machines=[]
+        for i in range(0,self.number_of_machines):
+            current_machine=Machine(i)
+            list_machines.append(current_machine)
+        return list_machines
+    #Scheduling
+    def assignPatient(self,patient,type,day):
+        for machine in self.machines:
+            if(machine.add_Patient(patient,type,day)):
+                if(type=="Short"):
+                  patient.num_short+=1
+                  patient.left_short-=1
+                  patient.received_service=True
+                  patient.left_time=2
+                else:
+                    patient.received_service = True
+                    patient.left_time = 3
+                return True
+        return False
+
+    # Scheduling
+    def run_scheduling(self):
+        self.solve_schedule(1,0)
+        for patient in self.patients:
+            if(patient.transferred_out==True):
+                self.remove_patient(patient)
+            else:
+                self.count_received+=1
+
+
+    # Scheduling
+    def solve_schedule(self,day,given_start):
+      if(day!=1):
+       for patient in self.patients:
+          patient.left_time-=1
+          if(patient.left_time<0):
+              patient.transferred_out=True
+              patient.received_service=False
+
+      daily_short_capacity = self.number_of_machines * 4
+
+      #min_sol=0
+      min_sol=Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+      min_obj=1000000
+      min_ratio=0
+      count_transferredOut=0
+      recursive_day=2 #This affects run time
+      if(day<=recursive_day or day>=15-recursive_day):
+          list_strategy = []
+          for start_int in range(4,9):
+               start = start_int/10
+               list_strategy.append(start)
+          #list_strategy.append(0.7)
+      else:
+          list_strategy=[given_start]
+      for start in list_strategy:
+          #r_short = start + ((-start / 15) * (day - 1))
+          r_short=start
+          num_short=int(r_short*daily_short_capacity)
+          left_short_capacity= self.number_of_machines * 4
+          #try_center=Center(1,1,1,1,1,1,1,1,1,1)
+          #try_center.Paste(self)
+          try_center=copy.deepcopy(self)
+          num_normal=math.floor((daily_short_capacity-num_short)/2)
+          while(2*num_normal+num_short<daily_short_capacity):
+              num_short+=1
+          total_patients=num_short+num_normal
+          candidate_patients=try_center.findCandidates(total_patients)
+          assigned_short=0
+          candidate_num=0
+          while(assigned_short<num_short and candidate_num<len(candidate_patients)and left_short_capacity>=1):
+            current_patient=candidate_patients[candidate_num]
+            assigned=False
+            if(current_patient.left_short>0):
+                if(try_center.assignPatient(current_patient,"Short",day)):
+                   assigned_short+=1
+                   left_short_capacity-=1
+                   assigned=True
+            if(assigned==False):
+              try_center.assignPatient(current_patient, "Normal", day)
+
+            candidate_num+=1
+
+          while ( candidate_num < len(candidate_patients)):
+
+              current_patient = candidate_patients[candidate_num]
+              if  (try_center.assignPatient(current_patient, "Normal", day)):
+                  left_short_capacity -= 2
+              else:
+                  if(try_center.assignPatient(current_patient, "Short", day)):
+                      left_short_capacity -= 1
+
+              candidate_num+=1
+
+          try_iter=20
+
+          #for evaluation
+          #t_out=self.total_out()
+          #print(self.total_out())
+          #try_center.scheduling_evaluate()
+          #print("IIII Tried at ", day, " ratio ", start, " result ", try_center.scheduling_evaluate_D(try_center), " min_obj was ",min_obj)
+          if(day==14):
+              for patient in try_center.patients:
+                  if(patient.received_service==False):
+                      patient.transferred_out=True
+
+
+          else:
+
+            try_center.solve_schedule(day+1,start)
+          #print("Tried at ",day," ratio ",start," result " ,try_center.scheduling_evaluate()," min_obj was ",min_obj)
+          if(try_center.scheduling_evaluate()<min_obj):
+              #print("At day ",day, "with ratio ",start, "objective ",try_center.scheduling_evaluate())
+              min_obj=try_center.scheduling_evaluate()
+
+              #min_sol=try_center
+              #min_sol.Paste(try_center)
+              min_sol=copy.deepcopy(try_center)
+              min_sol.ratios[day - 1] = start
+              min_ratio=start
+
+
+      #min_sol.ratios[day-1]=min_ratio
+      self.Paste(min_sol)
+
+
+
+    def scheduling_evaluate(self):
+        total_patient=0
+        count_transferredOut=0
+        count_Short=0
+        for patient in self.patients:
+            total_patient+=1
+            count_Short+=patient.num_short
+            if(patient.transferred_out):
+                count_transferredOut+=1
+        return count_transferredOut*200+count_Short*10
+
+    def scheduling_evaluate_D(self,center):
+        total_patient=0
+        count_transferredOut=0
+        count_Short=0
+        for patient in center.patients:
+            total_patient+=1
+            if(patient.transferred_out):
+                count_transferredOut+=1
+            else:
+                count_Short += patient.num_short
+        return count_transferredOut*200+count_Short*10
+
+    def total_out(self):
+        count_transferredOut=0
+        for patient in self.patients:
+            if(patient.transferred_out):
+                count_transferredOut+=1
+        return count_transferredOut
+
+    def total_short(self):
+        count_Short = 0
+        for patient in self.patients:
+            count_Short += patient.num_short
+        return count_Short
+
+
+    #Scheduling
+    def findCandidates(self,mum_patient):
+
+        for i in range(0,len(self.patients)):
+            self.patients[i].is_candidate=False
+
+        daily_short_capacity = self.number_of_machines * 4
+        patients_prim = list(filter(lambda x:( x.received_service == True and x.left_time==0 and x.transferred_out == False ), self.patients))
+        patients_prim = sorted(patients_prim, key=lambda x: x.left_short, reverse=True)
+        patients=list(filter(lambda x: x.transferred_out == False and x not in patients_prim, self.patients))
+        sorted_patients = sorted(patients, key=lambda x: x.left_time, reverse=False)
+        candidate_patients=sorted_patients[0:(daily_short_capacity-len(patients_prim)+3)]
+        for patient in candidate_patients:
+            patient.is_candidate=True
+        #filtered = candidate_patients[0:int(mum_patient)]
+        filtered_sorted= sorted(candidate_patients, key=lambda x: x.left_short, reverse=True)
+        patients_prim.extend(filtered_sorted)
+        return patients_prim
+
+
+    # Assignment
     def addPatient(self,patient):
         patient.is_assigned=True
         self.patients.append(patient)
@@ -70,6 +379,7 @@ class Center:
         if(self.remaining_capacity<1):
             self.is_Full=True
 
+    # Assignment
     def remove_patient(self,patient):
         patient.is_assigned =False
         self.patients.remove(patient)
@@ -77,12 +387,15 @@ class Center:
         self.patient_In_Center -=1
         self.is_Full = False
 
+    # Assignment
     def distance_to_Patient(self,patient):
         return self.distances.iloc[int(patient.no)]
 
+    # Assignment
     def distance_to_Center(self,center):
         return self.distances.iloc[self.patient_count+int(center.Instance_no)]
 
+    # Assignment
     def calculate_capacity(self,planing_horizon = 14,L = 4):
         long_alpha = 3
         short_alpha = 2
@@ -105,7 +418,7 @@ class Center:
         ch0 = self.ch0
 
         capacity = (long_alpha * c + 1) * math.floor(ch0 / c) + long_alpha * (ch0 % c)
-        print(capacity)
+
 
         #capacity = self.number_of_machines * 3.5
         return capacity
@@ -158,6 +471,13 @@ class Network:
             for patient in center.patients:
                 total_distance+=patient.distance_to_Center(center)*patient.np
         return total_distance
+
+    def scheduleSolver(self):
+        for center in self.centers:
+            center.run_scheduling()
+            print("Center ",center.no," Assigned: ",center.patient_In_Center," Received service ",center.count_received)
+            print("ratios ",center.ratios)
+            print(" ")
 
     def add_patient(self,patient):
         self.patients.append(patient)
@@ -380,42 +700,60 @@ if __name__ == '__main__':
         center_instance_no += 1
         network.add_center(current_center)
         center_index += 1
-
+# --------------------------
     network2 = copy.deepcopy(network)
     network3 = copy.deepcopy(network)
     network4 = copy.deepcopy(network)
 
     print('Patient Assignment')
-    #network.assignPatientsByDistPoint()
-    #network.Print()
+    network.assignPatientsByDistPoint()
+    network.Print()
     print(20 * "-")
 
+    network.scheduleSolver()
+    #print(selectedCenter.scheduling_evaluate())
+
+    # print("*****")
+    #
+    # center=Center(1, 1, "K", "district", 1, 1, 3, 1, 20, 10)
+    # patient_no=0
+    # for i in range (0,13):
+    #     for s in range(3,4):
+    #        patient=Patient(patient_no,s,1,1,1,10)
+    #        patient_no+=1
+    #        center.addPatient(patient)
+    # center.run_scheduling()
+    # print("Result ",center.scheduling_evaluate())
+    # print("# of Out ",center.total_out())
+    # center.PrintPatientTreatments()
+    # center.PrintMachineTreatments()
+    # center.totalService()
     #print('Lost Point Assignment')
     #network2.assignbyLostPoint()
     #network2.Print()
-    print(20 * "-")
-
-    print('Dist Point Assignment')
-    #network3.assignbyDistPoint()
-    #network3.Print()
-    print(20 * "-")
-
-    print("Balanced sp")
-    network4.assign_patients_balanced_sp()
-    network4.Print()
-
-    print(20*"-")
-    print('Simulated Annealing Approach')
-
-    simulated_annealing_results = []
-
-    for iteration in range(0,10):
-        start = time.time()
-        improved_network = copy.deepcopy(network4)
-        best_solution = improved_network.simulated_annealing(initial_temperature=100000,cooling_rate=0.8,epoch_length=10)
-        end = time.time()
-        simulated_annealing_results.append([iteration, best_solution.objective_function(), end - start])
-
-    simulated_annealing_result_df = pd.DataFrame(simulated_annealing_results,columns=['Run','Objective Value','Runtime'])
-    print(simulated_annealing_result_df)
-    y = 5
+    # print(20 * "-")
+    #
+    # print('Dist Point Assignment')
+    # #network3.assignbyDistPoint()
+    # #network3.Print()
+    # print(20 * "-")
+    #
+    # print("Balanced sp")
+    # network4.assign_patients_balanced_sp()
+    # network4.Print()
+    #
+    # print(20*"-")
+    # print('Simulated Annealing Approach')
+    #
+    # simulated_annealing_results = []
+    #
+    # for iteration in range(0,10):
+    #     start = time.time()
+    #     improved_network = copy.deepcopy(network4)
+    #     best_solution = improved_network.simulated_annealing(initial_temperature=100000,cooling_rate=0.8,epoch_length=10)
+    #     end = time.time()
+    #     simulated_annealing_results.append([iteration, best_solution.objective_function(), end - start])
+    #
+    # simulated_annealing_result_df = pd.DataFrame(simulated_annealing_results,columns=['Run','Objective Value','Runtime'])
+    # print(simulated_annealing_result_df)
+    # y = 5
