@@ -208,13 +208,56 @@ class Center:
 
     # Scheduling
     def run_scheduling(self):
-        self.solve_schedule(1,0)
+        #self.solve_schedule(1,0)
+        self.solve_schedule_alt()
         for patient in self.patients:
             if(patient.transferred_out==True):
                 self.remove_patient(patient)
             else:
                 self.count_received+=1
 
+    def solve_schedule_alt(self):
+
+        list_ratios=[]
+
+        # for ratio_int in range(4, 9):
+        #     ratio_1 = ratio_int / 10
+        #     for ratio_int2 in range(4, 9):
+        #         ratio_2 = ratio_int2 / 10
+        #         for ratio_int3 in range(4, 9):
+        #             ratio_3 = ratio_int3 / 10
+        #             for ratio_int4 in range(4, 9):
+        #                 ratio_4 = ratio_int4 / 10
+        #                 for ratio_int5 in range(4, 9):
+        #                     ratio_5 = ratio_int5 / 10
+        #                     list_ratios.append([ratio_1,ratio_2,ratio_3,ratio_4,ratio_5])
+
+        for ratio_int in range(5, 9):
+            ratio_1 = ratio_int / 10
+            for ratio_int2 in range(6, 9):
+                ratio_2 = ratio_int2 / 10
+                for ratio_int3 in range(5, 9):
+                    ratio_3 = ratio_int3 / 10
+                    list_ratios.append([ratio_1,ratio_1,ratio_2,ratio_3,ratio_3])
+
+
+
+        # min_sol=0
+        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+        min_obj = 1000000
+        min_ratio = 0
+        count_transferredOut = 0
+        for ratio_l in list_ratios:
+            try_center = copy.deepcopy(self)
+            try_center.solve_schedule_RREasy(ratio_l)
+            if (try_center.scheduling_evaluate() < min_obj):
+                # print("At day ",day, "with ratio ",start, "objective ",try_center.scheduling_evaluate())
+                min_obj = try_center.scheduling_evaluate()
+                # min_sol=try_center
+                # min_sol.Paste(try_center)
+                min_obj = try_center.scheduling_evaluate()
+                min_sol = copy.deepcopy(try_center)
+        self.Paste(min_sol)
 
     # Scheduling
     def solve_schedule(self,day,given_start):
@@ -296,7 +339,8 @@ class Center:
           else:
 
             try_center.solve_schedule(day+1,start)
-          #print("Tried at ",day," ratio ",start," result " ,try_center.scheduling_evaluate()," min_obj was ",min_obj)
+
+          print("kkkkkk Tried at ",day,"previous ratio",try_center.ratios[day-1]," ratio ",start," result " ,try_center.scheduling_evaluate()," min_obj was ",min_obj)
           if(try_center.scheduling_evaluate()<min_obj):
               #print("At day ",day, "with ratio ",start, "objective ",try_center.scheduling_evaluate())
               min_obj=try_center.scheduling_evaluate()
@@ -311,7 +355,173 @@ class Center:
       #min_sol.ratios[day-1]=min_ratio
       self.Paste(min_sol)
 
+    def solve_schedule_RREasy(self,list_R):
+        daily_short_capacity = self.number_of_machines * 4
+        for day in range(1,15):
+            if (day != 1):
+                for patient in self.patients:
+                    patient.left_time -= 1
+                    if (patient.left_time < 0):
+                        patient.transferred_out = True
+                        patient.received_service = False
+            if (day < 3):
+                start = list_R[day - 1]
+            elif (day == 13):
+                start = list_R[3]
+            elif (day == 14):
+                start = list_R[4]
+            else:
+                start = list_R[2]
+            r_short = start
+            num_short = int(r_short * daily_short_capacity)
+            left_short_capacity = self.number_of_machines * 4
+            # try_center=Center(1,1,1,1,1,1,1,1,1,1)
+            # try_center.Paste(self)
 
+            num_normal = math.floor((daily_short_capacity - num_short) / 2)
+            while (2 * num_normal + num_short < daily_short_capacity):
+                num_short += 1
+            total_patients = num_short + num_normal
+            candidate_patients = self.findCandidates(total_patients)
+            assigned_short = 0
+            candidate_num = 0
+            while (assigned_short < num_short and candidate_num < len(candidate_patients) and left_short_capacity >= 1):
+                current_patient = candidate_patients[candidate_num]
+                assigned = False
+                if (current_patient.left_short > 0):
+                    if (self.assignPatient(current_patient, "Short", day)):
+                        assigned_short += 1
+                        left_short_capacity -= 1
+                        assigned = True
+                if (assigned == False):
+                    self.assignPatient(current_patient, "Normal", day)
+
+                candidate_num += 1
+
+            while (candidate_num < len(candidate_patients)):
+
+                current_patient = candidate_patients[candidate_num]
+                if (self.assignPatient(current_patient, "Normal", day)):
+                    left_short_capacity -= 2
+                else:
+                    if (self.assignPatient(current_patient, "Short", day)):
+                        left_short_capacity -= 1
+
+                candidate_num += 1
+
+            try_iter = 20
+
+            # for evaluation
+            # t_out=self.total_out()
+            # print(self.total_out())
+            # try_center.scheduling_evaluate()
+            # print("IIII Tried at ", day, " ratio ", start, " result ", try_center.scheduling_evaluate_D(try_center), " min_obj was ",min_obj)
+            if (day == 14):
+                for patient in self.patients:
+                    if (patient.received_service == False):
+                        patient.transferred_out = True
+
+            self.ratios[day-1]=start
+
+
+
+
+    def solve_schedule_notR(self, day,list_R):
+        if (day != 1):
+            for patient in self.patients:
+                patient.left_time -= 1
+                if (patient.left_time < 0):
+                    patient.transferred_out = True
+                    patient.received_service = False
+
+        daily_short_capacity = self.number_of_machines * 4
+
+        # min_sol=0
+        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+        min_obj = 1000000
+        min_ratio = 0
+        count_transferredOut = 0
+        if(day<3):
+           list_strategy=list_R[day-1]
+        elif(day==13):
+           list_strategy = list_R[3]
+        elif (day == 14):
+            list_strategy = list_R[4]
+        else:
+            list_strategy = list_R[2]
+
+
+
+        for start in [list_strategy]:
+            # r_short = start + ((-start / 15) * (day - 1))
+            r_short = start
+            num_short = int(r_short * daily_short_capacity)
+            left_short_capacity = self.number_of_machines * 4
+            # try_center=Center(1,1,1,1,1,1,1,1,1,1)
+            # try_center.Paste(self)
+            try_center = copy.deepcopy(self)
+            num_normal = math.floor((daily_short_capacity - num_short) / 2)
+            while (2 * num_normal + num_short < daily_short_capacity):
+                num_short += 1
+            total_patients = num_short + num_normal
+            candidate_patients = try_center.findCandidates(total_patients)
+            assigned_short = 0
+            candidate_num = 0
+            while (assigned_short < num_short and candidate_num < len(candidate_patients) and left_short_capacity >= 1):
+                current_patient = candidate_patients[candidate_num]
+                assigned = False
+                if (current_patient.left_short > 0):
+                    if (try_center.assignPatient(current_patient, "Short", day)):
+                        assigned_short += 1
+                        left_short_capacity -= 1
+                        assigned = True
+                if (assigned == False):
+                    try_center.assignPatient(current_patient, "Normal", day)
+
+                candidate_num += 1
+
+            while (candidate_num < len(candidate_patients)):
+
+                current_patient = candidate_patients[candidate_num]
+                if (try_center.assignPatient(current_patient, "Normal", day)):
+                    left_short_capacity -= 2
+                else:
+                    if (try_center.assignPatient(current_patient, "Short", day)):
+                        left_short_capacity -= 1
+
+                candidate_num += 1
+
+            try_iter = 20
+
+            # for evaluation
+            # t_out=self.total_out()
+            # print(self.total_out())
+            # try_center.scheduling_evaluate()
+            # print("IIII Tried at ", day, " ratio ", start, " result ", try_center.scheduling_evaluate_D(try_center), " min_obj was ",min_obj)
+            if (day == 14):
+                for patient in try_center.patients:
+                    if (patient.received_service == False):
+                        patient.transferred_out = True
+
+
+            else:
+
+                try_center.solve_schedule_notR(day + 1, list_R)
+
+            print("kkkkkk Tried at ", day, "previous ratio", try_center.ratios[day - 1], " ratio ", start, " result ",
+                  try_center.scheduling_evaluate(), " min_obj was ", min_obj)
+            if (try_center.scheduling_evaluate() < min_obj):
+                # print("At day ",day, "with ratio ",start, "objective ",try_center.scheduling_evaluate())
+                min_obj = try_center.scheduling_evaluate()
+
+                # min_sol=try_center
+                # min_sol.Paste(try_center)
+                min_sol = copy.deepcopy(try_center)
+                min_sol.ratios[day - 1] = start
+                min_ratio = start
+
+        # min_sol.ratios[day-1]=min_ratio
+        self.Paste(min_sol)
 
     def scheduling_evaluate(self):
         total_patient=0
@@ -711,14 +921,14 @@ if __name__ == '__main__':
     print(20 * "-")
 
     network.scheduleSolver()
-    #print(selectedCenter.scheduling_evaluate())
+#    print(selectedCenter.scheduling_evaluate())
 
     # print("*****")
     #
     # center=Center(1, 1, "K", "district", 1, 1, 3, 1, 20, 10)
     # patient_no=0
-    # for i in range (0,13):
-    #     for s in range(3,4):
+    # for i in range (0,2):
+    #     for s in range(1,4):
     #        patient=Patient(patient_no,s,1,1,1,10)
     #        patient_no+=1
     #        center.addPatient(patient)
@@ -727,7 +937,7 @@ if __name__ == '__main__':
     # print("# of Out ",center.total_out())
     # center.PrintPatientTreatments()
     # center.PrintMachineTreatments()
-    # center.totalService()
+    #center.totalService()
     #print('Lost Point Assignment')
     #network2.assignbyLostPoint()
     #network2.Print()
