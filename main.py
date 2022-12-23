@@ -232,11 +232,11 @@ class Center:
         #                     ratio_5 = ratio_int5 / 10
         #                     list_ratios.append([ratio_1,ratio_2,ratio_3,ratio_4,ratio_5])
 
-        for ratio_int in range(5, 9):
+        for ratio_int in range(1, 9):
             ratio_1 = ratio_int / 10
-            for ratio_int2 in range(6, 9):
+            for ratio_int2 in range(1, 9):
                 ratio_2 = ratio_int2 / 10
-                for ratio_int3 in range(5, 9):
+                for ratio_int3 in range(1, 9):
                     ratio_3 = ratio_int3 / 10
                     list_ratios.append([ratio_1,ratio_1,ratio_2,ratio_3,ratio_3])
 
