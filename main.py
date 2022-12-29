@@ -116,7 +116,8 @@ class Machine:
 
 class Center:
 
-    def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count,ch0,severity):
+    def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count,ch0,severity,total_capacity):
+            self.total_capacity = total_capacity
             self.name=name
             self.no=no
             self.Instance_no=Instance_no
@@ -136,6 +137,7 @@ class Center:
                 self.number_of_machines = self.ch0
 
             self.capacity = self.calculate_capacity()
+            self.capacity=(self.capacity/total_capacity)*patient_count
             self.distances = distances
             self.patient_count = patient_count
             self.patient_In_Center=0
@@ -145,6 +147,8 @@ class Center:
             self.machines=self.initialize_machines()
             self.count_received=0
             self.ratios=14*[None]
+
+
 
     def totalService(self):
         for day in range(1,15):
@@ -174,6 +178,23 @@ class Center:
             print("Machine ", machine.no)
             machine.Print()
             print("   ")
+
+    def reset(self):
+        self.count_received = 0
+        for patient in self.patients:
+
+            patient.left_time = (3 - patient.sp)
+            patient.left_short = 3
+            patient.num_short = 0
+            patient.received_service = False
+            patient.transferred_out = False
+            patient.is_candidate = False
+
+            patient.treatments = []
+
+        for machine in self.machines:
+            machine.schedule = machine.initialize_schedule()
+
 
     def Paste(self,Center):
         self.name = copy.deepcopy(Center.name)
@@ -248,8 +269,10 @@ class Center:
                 ratio_2 = ratio_int2 / 10
                 for ratio_int3 in range(0, 6):
                     ratio_3 = ratio_int3 / 10
-                    list_ratios.append([ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2])
-
+                    for ratio_int4 in range(0, 6):
+                        ratio_4 = ratio_int4 / 10
+                    #list_ratios.append([ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2])
+                        list_ratios.append([ratio_1, ratio_2, ratio_3,ratio_4, ratio_4, ratio_4, ratio_4, ratio_4, ratio_4, ratio_4, ratio_4, ratio_4, ratio_4, ratio_4])
 
         # for ratio_int in range(0, 6):
         #     ratio_1 = ratio_int / 10
@@ -263,7 +286,7 @@ class Center:
 
 
         # min_sol=0
-        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1,severity=self.severity)
+        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1,severity=self.severity,total_capacity=self.total_capacity)
         min_obj = 1000000
         min_ratio = 0
         count_transferredOut = 0
@@ -291,7 +314,7 @@ class Center:
       daily_short_capacity = self.number_of_machines * 4
 
       #min_sol=0
-      min_sol=Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+      min_sol=Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1,self.severity,self.total_capacity)
       min_obj=1000000
       min_ratio=0
       count_transferredOut=0
@@ -469,8 +492,6 @@ class Center:
             list_strategy = list_R[4]
         else:
             list_strategy = list_R[2]
-
-
 
         for start in [list_strategy]:
             # r_short = start + ((-start / 15) * (day - 1))
@@ -652,7 +673,32 @@ class Center:
         #capacity = self.number_of_machines * 3.5
         return capacity
 
+def calculate_capacity_N(ch0,planing_horizon = 14,L = 4):
+        long_alpha = 3
+        short_alpha = 2
 
+        c = 1
+        inequality_lhs = long_alpha * c + 1
+        inequality_rhs_top = (planing_horizon - (long_alpha - 1)) * c
+        inequality_rhs_bottom = (planing_horizon - (long_alpha - 1) - L * short_alpha)/long_alpha + L * 0.5
+        inequality_rhs = inequality_rhs_top / inequality_rhs_bottom
+
+        while not inequality_lhs <= inequality_rhs and c < 100:
+            c += 1
+            inequality_lhs = long_alpha * c + 1
+            inequality_rhs_top = (planing_horizon - (long_alpha - 1)) * c
+            inequality_rhs_bottom = ((planing_horizon - (long_alpha - 1) - L * short_alpha) / long_alpha) + (L * 0.5)
+            inequality_rhs = inequality_rhs_top / inequality_rhs_bottom
+
+        #capacity_at_day_0 = self.number_of_machines * 0.2 * (8 / 4)  #8 hours on a day assumed
+        #capacity_at_day_* (Ch0) = num_of_machines * hours_in_a_day / length of a long session (4-hours)
+
+
+        capacity = (long_alpha * c + 1) * math.floor(ch0 / c) + long_alpha * (ch0 % c)
+
+
+        #capacity = self.number_of_machines * 3.5
+        return capacity
 class Network:
     def __init__(self,simulation_scope,total_patients):
         self.centers=[]
@@ -821,21 +867,27 @@ class Network:
 
     def scheduling_improvement(self):
         print("improvement started")
-        unscheduled_patients = [patient for patient in self.patients if patient.is_assigned]
+        unscheduled_patients = [patient for patient in self.patients if not patient.is_assigned]
 
         sorted_sp_patients = sorted(unscheduled_patients, key=lambda x: x.sp, reverse=False)
         sorted_centers = sorted(self.centers, key=lambda x: max(x.ratios), reverse=True)
         non_improving_centers = []
         for center in sorted_centers:
             serviced_count_before_improvement = center.count_received
+
             for patient in sorted_sp_patients:
-                center.addPatient(patient)
+                if not patient.is_assigned:
+                    center.addPatient(patient)
+                else:
+                    continue
                 print(f"Patient {patient.no} assigned to Center {center.no}")
+                center.reset()
                 center.run_scheduling()
                 print(center.scheduling_evaluate())
                 if serviced_count_before_improvement < center.count_received:
                     print(f"Before {serviced_count_before_improvement},After {center.count_received}")
-                    continue
+                    serviced_count_before_improvement = center.count_received
+
                 else:
                     break
 
@@ -995,9 +1047,18 @@ if __name__ == '__main__':
     ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B3')
     center_index = 0
     severity = "Karamsar"
+    total_capacity=0
+    center_index2=0
+    for index, row in dialysis_centers.iterrows():
+        total_capacity += calculate_capacity_N(ch0_data[severity].iloc[center_index2])
+        center_index2 += 1
+
     for index, row in dialysis_centers.iterrows():
         ch0 = ch0_data[severity].iloc[center_index]
-        current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0,severity=severity)
+        #center_capacity_Cem=calculate_capacity_N(ch0_data[severity].iloc[center_index2])
+        #center_capacity_us=int((center_capacity_Cem/total_capacity)*patient_count)
+        current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0,severity=severity,total_capacity=total_capacity)
+
         center_instance_no += 1
         network.add_center(current_center)
         center_index += 1
@@ -1016,9 +1077,13 @@ if __name__ == '__main__':
     end = time.time()
     print(f"Assignment and Scheduling Completed in {str(end - start)} seconds")
 
+    start = time.time()
     network.scheduling_improvement()
-    network.final_objective_function()
+    #network.scheduleSolver()
 
+    network.final_objective_function()
+    end = time.time()
+    print(f"Scheduling Improvement Completed in {str(end - start)} seconds")
 #    print(selectedCenter.scheduling_evaluate())
 
     # print("*****")
