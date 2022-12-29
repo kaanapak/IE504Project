@@ -116,7 +116,7 @@ class Machine:
 
 class Center:
 
-    def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count,ch0):
+    def __init__(self,no,Instance_no,name,district,x,y,number_of_machines,distances,patient_count,ch0,severity):
             self.name=name
             self.no=no
             self.Instance_no=Instance_no
@@ -125,6 +125,16 @@ class Center:
             self.y = y
             self.number_of_machines = number_of_machines
             self.ch0 = ch0
+            self.severity = severity
+            if self.severity == "İyimser":
+                self.number_of_machines = self.ch0 // 2
+
+            elif self.severity == "Orta":
+                self.number_of_machines = self.ch0 // 2
+
+            else:
+                self.number_of_machines = self.ch0
+
             self.capacity = self.calculate_capacity()
             self.distances = distances
             self.patient_count = patient_count
@@ -232,18 +242,28 @@ class Center:
         #                     ratio_5 = ratio_int5 / 10
         #                     list_ratios.append([ratio_1,ratio_2,ratio_3,ratio_4,ratio_5])
 
-        for ratio_int in range(1, 9):
+        for ratio_int in range(0, 6):
             ratio_1 = ratio_int / 10
-            for ratio_int2 in range(1, 9):
+            for ratio_int2 in range(0, 6):
                 ratio_2 = ratio_int2 / 10
-                for ratio_int3 in range(1, 9):
+                for ratio_int3 in range(0, 6):
                     ratio_3 = ratio_int3 / 10
-                    list_ratios.append([ratio_1,ratio_1,ratio_2,ratio_3,ratio_3])
+                    list_ratios.append([ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2,ratio_3,ratio_1,ratio_2])
 
+
+        # for ratio_int in range(0, 6):
+        #     ratio_1 = ratio_int / 10
+        #     for ratio_int2 in range(0, 6):
+        #         ratio_2 = ratio_int2 / 10
+        #         for ratio_int3 in range(0, 6):
+        #             ratio_3 = ratio_int3 / 10
+        #             for ratio_int4 in range(0, 6):
+        #                 ratio_4 = ratio_int4 / 10
+        #                 list_ratios.append([ratio_1,ratio_1,ratio_2,ratio_3,ratio_4,ratio_4])
 
 
         # min_sol=0
-        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1,severity=self.severity)
         min_obj = 1000000
         min_ratio = 0
         count_transferredOut = 0
@@ -335,7 +355,6 @@ class Center:
                   if(patient.received_service==False):
                       patient.transferred_out=True
 
-
           else:
 
             try_center.solve_schedule(day+1,start)
@@ -364,14 +383,18 @@ class Center:
                     if (patient.left_time < 0):
                         patient.transferred_out = True
                         patient.received_service = False
-            if (day < 3):
-                start = list_R[day - 1]
-            elif (day == 13):
-                start = list_R[3]
-            elif (day == 14):
-                start = list_R[4]
-            else:
-                start = list_R[2]
+
+            # # ratio_1,ratio_1,ratio_2,ratio_3,ratio_4,ratio_4
+            # if day < 4:
+            #     start = list_R[day - 1]
+            #
+            # elif (day == 13):
+            #     start = list_R[4]
+            # elif (day == 14):
+            #     start = list_R[5]
+            # else:
+            #     start = list_R[3]
+            start=list_R[day-1]
             r_short = start
             num_short = int(r_short * daily_short_capacity)
             left_short_capacity = self.number_of_machines * 4
@@ -423,10 +446,7 @@ class Center:
 
             self.ratios[day-1]=start
 
-
-
-
-    def solve_schedule_notR(self, day,list_R):
+    def solve_schedule_notR(self, day,list_R,severity):
         if (day != 1):
             for patient in self.patients:
                 patient.left_time -= 1
@@ -437,7 +457,7 @@ class Center:
         daily_short_capacity = self.number_of_machines * 4
 
         # min_sol=0
-        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+        min_sol = Center(1, 1, 1, 1, 1, 1, 1, 1, 1, 1,severity = self.severity)
         min_obj = 1000000
         min_ratio = 0
         count_transferredOut = 0
@@ -503,10 +523,9 @@ class Center:
                     if (patient.received_service == False):
                         patient.transferred_out = True
 
-
             else:
 
-                try_center.solve_schedule_notR(day + 1, list_R)
+                try_center.solve_schedule_notR(day + 1, list_R,self.severity)
 
             print("kkkkkk Tried at ", day, "previous ratio", try_center.ratios[day - 1], " ratio ", start, " result ",
                   try_center.scheduling_evaluate(), " min_obj was ", min_obj)
@@ -528,11 +547,11 @@ class Center:
         count_transferredOut=0
         count_Short=0
         for patient in self.patients:
-            total_patient+=1
-            count_Short+=patient.num_short
+            total_patient += 1
+            count_Short += patient.num_short
             if(patient.transferred_out):
-                count_transferredOut+=1
-        return count_transferredOut*200+count_Short*10
+                count_transferredOut += 1
+        return count_transferredOut * 1 + count_Short * 10 * 0.00001
 
     def scheduling_evaluate_D(self,center):
         total_patient=0
@@ -544,7 +563,7 @@ class Center:
                 count_transferredOut+=1
             else:
                 count_Short += patient.num_short
-        return count_transferredOut*200+count_Short*10
+        return count_transferredOut*1+count_Short*10
 
     def total_out(self):
         count_transferredOut=0
@@ -591,7 +610,7 @@ class Center:
 
     # Assignment
     def remove_patient(self,patient):
-        patient.is_assigned =False
+        patient.is_assigned = False
         self.patients.remove(patient)
         self.remaining_capacity += 1
         self.patient_In_Center -=1
@@ -649,8 +668,8 @@ class Network:
         total_patient=0;
         total_distance = 0
         for center in self.centers:
-            total_patient+=center.patient_In_Center
-            print("Center ",center.no," Name ",center.name," Number of Patients ",center.patient_In_Center)
+            total_patient+= len(center.patients)
+            print("Center ",center.no," Name ",center.name," Number of Patients ",center.patient_In_Center,"Center Capacity:",center.capacity)
             current_patient_list=center.patients
             sp1Patient=0
             sp2Patient=0
@@ -668,26 +687,56 @@ class Network:
             print("Number of sp1: ",sp1Patient," Number of sp2 ",sp2Patient, "Number of sp3 ",sp3Patient)
             print("Total Distance at center ",current_distance)
             print("------------")
-            total_distance+=current_distance
+            total_distance += current_distance
 
         print('*******')
-        print('Total customers served ',total_patient)
-        print('Number of transferred out ',(self.patient_count-total_patient))
+        print('Total patients Assigned ',total_patient)
+        print('Number of transferred out ',(self.patient_count - total_patient))
         print('Total distance ',total_distance)
 
     def objective_function(self):  # SEFA: UPDATE WITH VALUES OF BETA and SENDING A PATIENT OUTSIDE
         total_distance = 0
+
         for center in self.centers:
             for patient in center.patients:
-                total_distance+=patient.distance_to_Center(center)*patient.np
+                total_distance += patient.distance_to_Center(center)*patient.np
         return total_distance
 
+    def final_objective_function(self,epsilon = 0.00001):
+
+        objective_function = 0
+
+        for center in self.centers:
+            for patient in center.patients:
+                if patient.transferred_out:
+                    center.remove_patient(patient)
+                    #patient.transferred_out = True
+                else:
+                    patient.distance_to_Center(center) * patient.np * epsilon
+            objective_function += center.total_short() * 10 * epsilon
+
+        for patient in self.patients:
+            if not patient.is_assigned:
+                objective_function += 1
+        print(objective_function)
+
     def scheduleSolver(self):
+        total_objective = 0
         for center in self.centers:
             center.run_scheduling()
-            print("Center ",center.no," Assigned: ",center.patient_In_Center," Received service ",center.count_received)
+            counts = [0, 0, 0, 0]
+            for patient in center.patients:
+                sp = patient.sp
+                counts[int(sp)] += 1
+
+            print("Center ",center.no," Assigned: ",center.patient_In_Center," Received service ",center.count_received,"Number Of Machines:",center.number_of_machines)
+            print("Center Patient Sp values:" + str(counts) )
             print("ratios ",center.ratios)
+            #center_result = center.scheduling_evaluate()
+            #total_objective += center_result
+            #print("Objective Value:",str(center_result))
             print(" ")
+        #print("Total Objective is:", str(total_objective))
 
     def add_patient(self,patient):
         self.patients.append(patient)
@@ -748,6 +797,48 @@ class Network:
     def c1_constructive_heuristics(self):
         pass
 
+    def assign_patients_balanced_sp_improved(self):
+        for center in self.centers:
+
+            patient_list = self.distPointList(center, 6)  # sorted by: patient.np / patient.distance_to_Center(center)
+            daily_capacity = center.number_of_machines * 2
+            cap_list = [0, daily_capacity, daily_capacity, daily_capacity]
+
+            for patient in patient_list:
+                sp = patient.sp
+                if cap_list[int(sp)] > 0 and not center.is_Full and not patient.is_assigned:
+                    center.addPatient(patient)
+                    cap_list[int(sp)] -= 1
+                    self.assigned_patients += 1
+
+        # KAAN'IN SP1 LERI BUYUK CENTERLARA DAGITMA FIKRI BURADA UYGULANABILIR
+        for center in self.centers:
+            patient_list = self.distPointList(center, 6)  # sorted by: patient.np / patient.distance_to_Center(center)
+
+            for patient in patient_list:
+                if patient.sp == 1 and not center.is_Full and not patient.is_assigned:
+                    center.addPatient(patient)
+
+    def scheduling_improvement(self):
+        print("improvement started")
+        unscheduled_patients = [patient for patient in self.patients if patient.is_assigned]
+
+        sorted_sp_patients = sorted(unscheduled_patients, key=lambda x: x.sp, reverse=False)
+        sorted_centers = sorted(self.centers, key=lambda x: max(x.ratios), reverse=True)
+        non_improving_centers = []
+        for center in sorted_centers:
+            serviced_count_before_improvement = center.count_received
+            for patient in sorted_sp_patients:
+                center.addPatient(patient)
+                print(f"Patient {patient.no} assigned to Center {center.no}")
+                center.run_scheduling()
+                print(center.scheduling_evaluate())
+                if serviced_count_before_improvement < center.count_received:
+                    print(f"Before {serviced_count_before_improvement},After {center.count_received}")
+                    continue
+                else:
+                    break
+
     def distancePointCalculatorPatient(self,patient):
         min_distance,min_center = self.nearest_center(patient)
         #print(patient.np)
@@ -765,7 +856,7 @@ class Network:
         patient_list = self.candidate_patients(center,coverage)
         for patient in patient_list:
             self.lostPointCalculator(patient,center)
-        return  sorted(patient_list, key=lambda x: x.temp_lostPoint, reverse=True)
+        return sorted(patient_list, key=lambda x: x.temp_lostPoint, reverse=True)
 
     def distPointList(self, center, coverage):
         patient_list = self.candidate_patients(center,coverage)
@@ -789,7 +880,7 @@ class Network:
                     for patient in remaining_sorted_patients:
                         if center.is_Full:
                             break
-                        if patient.sp == sp :
+                        if patient.sp == sp and not patient.is_assigned:
                             remaining_sorted_patients.remove(patient)
                             center.addPatient(patient)
                             self.assigned_patients += 1
@@ -899,14 +990,14 @@ if __name__ == '__main__':
     dialysis_centers = dialysis_centers.merge(facility_instance, how="left",on=['Merkez/Hastane No'])
     dialysis_centers=dialysis_centers[dialysis_centers['Is_Instance']=='Yes']
 
-
     center_instance_no=0
     distance_centers=distanceMatrix.tail(distanceMatrix.shape[0] -patient_count)
-    ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B1')
+    ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B3')
     center_index = 0
+    severity = "Karamsar"
     for index, row in dialysis_centers.iterrows():
-        ch0 = ch0_data['İyi'].iloc[center_index]
-        current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0)
+        ch0 = ch0_data[severity].iloc[center_index]
+        current_center = Center(row['Merkez/Hastane No'],center_instance_no,row['Diyaliz merkezi'],row['İlçe'], row['Koordinat x_x'], row['Koordinat y_x'],  row['Makineler'],distance_centers.iloc[center_instance_no],patient_count,ch0=ch0,severity=severity)
         center_instance_no += 1
         network.add_center(current_center)
         center_index += 1
@@ -914,13 +1005,20 @@ if __name__ == '__main__':
     network2 = copy.deepcopy(network)
     network3 = copy.deepcopy(network)
     network4 = copy.deepcopy(network)
-
+    start = time.time()
     print('Patient Assignment')
-    network.assignPatientsByDistPoint()
+    network.assign_patients_balanced_sp_improved() #distPoint
     network.Print()
     print(20 * "-")
 
     network.scheduleSolver()
+    network.final_objective_function()
+    end = time.time()
+    print(f"Assignment and Scheduling Completed in {str(end - start)} seconds")
+
+    network.scheduling_improvement()
+    network.final_objective_function()
+
 #    print(selectedCenter.scheduling_evaluate())
 
     # print("*****")
@@ -967,3 +1065,4 @@ if __name__ == '__main__':
     # simulated_annealing_result_df = pd.DataFrame(simulated_annealing_results,columns=['Run','Objective Value','Runtime'])
     # print(simulated_annealing_result_df)
     # y = 5
+
