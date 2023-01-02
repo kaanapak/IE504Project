@@ -28,10 +28,10 @@ class Patient:
         self.temp_distancePoint=0
         self.temp_center=0
         self.left_time=(3-self.sp)
-        self.left_short=3
+        self.left_short=4
         self.num_short=0
         self.received_service=False
-        self.transferred_out=False
+        self.transferred_out=True
         self.is_candidate=False
         self.treatments=[]
 
@@ -152,6 +152,9 @@ class Center:
 
     def feasibilityCheck(self):
         #print(" Feasibilit check of Center ",self.no)
+        for patient in self.patients:
+            if patient.transferred_out==True:
+                print("WARNİNG Transferred out patients left")
         transfer_out=False
         feasiblepatientList=[]
         list_machines=[]
@@ -248,10 +251,10 @@ class Center:
         for patient in self.patients:
 
             patient.left_time = (3 - patient.sp)
-            patient.left_short = 3
+            patient.left_short = 4
             patient.num_short = 0
             patient.received_service = False
-            patient.transferred_out = False
+            patient.transferred_out = True
             patient.is_candidate = False
 
             patient.treatments = []
@@ -305,11 +308,14 @@ class Center:
     def run_scheduling(self):
         #self.solve_schedule(1,0)
         self.solve_schedule_alt()
+        #self.count_received=0
         for patient in self.patients:
-            if(patient.transferred_out==True):
-                self.remove_patient(patient)
-            else:
-                self.count_received+=1
+            if (patient.transferred_out == False):
+                self.count_received += 1
+        #     if(patient.transferred_out==True):
+        #         self.remove_patient(patient)
+        #     else:
+        #         self.count_received+=1
 
     def solve_schedule_alt(self):
 
@@ -693,6 +699,7 @@ class Center:
 
     # Assignment
     def addPatient(self,patient):
+        patient.transferred_out=False
         patient.is_assigned=True
         self.patients.append(patient)
         self.remaining_capacity-=1
@@ -702,6 +709,7 @@ class Center:
 
     # Assignment
     def remove_patient(self,patient):
+        patient.transferred_out=True
         patient.is_assigned = False
         self.patients.remove(patient)
         self.remaining_capacity += 1
@@ -863,33 +871,69 @@ class Network:
     def final_objective_function(self,epsilon = 0.00001):
 
         objective_function = 0
+        transfer_out = 0
+        for patient in self.patients:
+            if(patient.is_assigned==False):
+                transfer_out+=1
+        print("Not assigned ",transfer_out)
 
         for center in self.centers:
+            removelist = []
             for patient in center.patients:
                 if patient.transferred_out:
-                    center.remove_patient(patient)
-                    #patient.transferred_out = True
-                else:
-                    patient.distance_to_Center(center) * patient.np * epsilon
-            objective_function += center.total_short() * 10 * epsilon
+                    transfer_out += 1
+                    removelist.append(patient)
+                    # patient.transferred_out = True
 
+                else:
+                    objective_function += center.total_short() * 10 * epsilon
+            for patient in removelist:
+                center.remove_patient(patient)
+
+
+
+        print("my transfer out ",transfer_out)
+        tr_out = 0
+        all=0
         for patient in self.patients:
-            if not patient.is_assigned:
-                objective_function += 1
+            # if not patient.is_assigned:
+            #     objective_function += 1
+            all+=1
+            if(patient.transferred_out==patient.is_assigned):
+                print("inconsistent!!!")
+            if  patient.transferred_out:
+               if(patient.is_assigned):
+                   print("inconsistent ----")
+               tr_out+=1
+               objective_function += 1
+        print("All ",all)
+        print("Transferred out ",tr_out)
+        print("Scheduled ",all-tr_out)
         print(objective_function)
 
     def scheduleSolver(self):
         total_objective = 0
+
         for center in self.centers:
+
             center.run_scheduling()
             counts = [0, 0, 0, 0]
-            for patient in center.patients:
-                sp = patient.sp
-                counts[int(sp)] += 1
+            print("Center ", center.no, " Assigned: ", center.patient_In_Center, " Received service ",
+                  center.count_received, "Number Of Machines:", center.number_of_machines)
 
-            print("Center ",center.no," Assigned: ",center.patient_In_Center," Received service ",center.count_received,"Number Of Machines:",center.number_of_machines)
-            print("Center Patient Sp values:" + str(counts) )
-            print("ratios ",center.ratios)
+            # removelist=[]
+            for patient in center.patients:
+             if not patient.transferred_out:
+            #         removelist.append(patient)
+            #         # patient.transferred_out = True
+            #    else:
+               sp = patient.sp
+               counts[int(sp)] += 1
+            # for patient in removelist:
+            #     center.remove_patient(patient)
+            print("Center Patient Sp values:" + str(counts))
+            print("ratios ", center.ratios)
+
             #center_result = center.scheduling_evaluate()
             #total_objective += center_result
             #print("Objective Value:",str(center_result))
