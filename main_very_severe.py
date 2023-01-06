@@ -84,7 +84,7 @@ class Machine:
         self.schedule=self.initialize_schedule()
         self.short_duration=2
         self.normal_duration =4
-        self.day_duration=8
+        self.day_duration=4
 
     def Print(self):
         for d_index in range(0,14):
@@ -207,7 +207,7 @@ class Center:
         max_list=[]
         for l in list_machines:
             max_list.append(max(l))
-        if max(max_list)>8:
+        if max(max_list)>4:
             print("Machine limit exceeded Machine: ",machine_no)
             return -1,False
         #print(" Center ",self.no," passed")
@@ -494,7 +494,7 @@ class Center:
       self.Paste(min_sol)
 
     def solve_schedule_RREasy(self,list_R):
-        daily_short_capacity = self.number_of_machines * 4
+        daily_short_capacity = self.number_of_machines * 2
         for day in range(1,15):
             if (day != 1):
                 for patient in self.patients:
@@ -519,7 +519,7 @@ class Center:
             num_short=daily_short_capacity-(num_normal*2)
 
             #num_short = int(r_short * daily_short_capacity)
-            left_short_capacity = self.number_of_machines * 4
+            left_short_capacity = self.number_of_machines * 2
             # try_center=Center(1,1,1,1,1,1,1,1,1,1)
             # try_center.Paste(self)
 
@@ -824,8 +824,8 @@ class Network:
             else:
                 total_feasible_patient+=number_feasible
 
-        patient_listN=[]
-        patient_list=[]
+        patient_listN = []
+        patient_list = []
 
         for center in self.centers:
             for patient in center.patients:
@@ -899,7 +899,7 @@ class Network:
                 total_distance += patient.distance_to_Center(center)*patient.np
         return total_distance
 
-    def final_objective_function(self,epsilon = 0.00001,beta = 10):
+    def final_objective_function(self, epsilon=0.00001, beta=10):
 
         transfer_out = 0
         for patient in self.patients:
@@ -907,21 +907,23 @@ class Network:
                 transfer_out += 1
         print("Not assigned ", transfer_out)
 
-        objective_function =transfer_out
+        objective_function = transfer_out
 
         for patient in self.patients:
 
-            if(patient.transferred_out==patient.is_assigned):
+            if (patient.transferred_out == patient.is_assigned):
                 print("inconsistent!!!")
-            if  patient.transferred_out:
-               if(patient.is_assigned):
-                   print("inconsistent ----")
+            if patient.transferred_out:
+                if (patient.is_assigned):
+                    print("inconsistent ----")
 
         for center in self.centers:
             for patient in center.patients:
                 objective_function += patient.np * center.distance_to_Patient(patient) * beta * epsilon
 
         print(objective_function)
+
+
 
     def repairNetwork(self,center):
         not_scheduled = center.not_scheduled
@@ -934,9 +936,6 @@ class Network:
 
     def scheduleSolver(self):
         total_objective = 0
-
-
-
         for center in self.centers:
 
             center.run_scheduling()
@@ -1235,7 +1234,7 @@ if __name__ == '__main__':
     distance_centers=distanceMatrix.tail(distanceMatrix.shape[0] -patient_count)
     ch0_data = pd.read_excel('Capacity.xlsx',sheet_name='B3')
     center_index = 0
-    severity = "Orta"
+    severity = "Karamsar"
     total_capacity=0
     center_index2=0
     for index, row in dialysis_centers.iterrows():
@@ -1252,12 +1251,10 @@ if __name__ == '__main__':
         network.add_center(current_center)
         center_index += 1
 # --------------------------
-    network2 = copy.deepcopy(network)
-    network3 = copy.deepcopy(network)
-    network4 = copy.deepcopy(network)
+
     start = time.time()
     print('Patient Assignment')
-    network.assign_patients_balanced_sp() #distPoint
+    network.assign_patients_balanced_sp()  # distPoint
     network.Print()
     print(20 * "-")
 
@@ -1265,18 +1262,23 @@ if __name__ == '__main__':
     network.final_objective_function()
     end = time.time()
     print(f"Assignment and Scheduling Completed in {str(end - start)} seconds")
-    network.feasibility_check()
+    #network.feasibility_check()
 
     # Improvement
     start = time.time()
     network.scheduling_improvement()
-    network.feasibility_check()
+    #network.feasibility_check()
     for center in network.centers:
         center.reset()
     network.scheduleSolver()
     network.final_objective_function()
     end = time.time()
     print(f"Scheduling Improvement Completed in {str(end - start)} seconds")
+
+#     for center in network.centers:
+#         center.reset()
+#     network.scheduleSolver()
+#     print()
     #
     # network.final_objective_function()
     # end = time.time()
@@ -1285,7 +1287,7 @@ if __name__ == '__main__':
 
     # print("*****")
     #
-    # center=Center(1, 1, "K", "district", 1, 1, 3, 1, 20, 10)
+    # center=Center(1, 1, "K", "district", 1, 1, 3, 1, 20, 10,"İyimser",20)
     # patient_no=0
     # for i in range (0,2):
     #     for s in range(1,4):
